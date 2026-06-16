@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: anton
+Version: 0.1.0
+Summary: Anton: Automated TTS & Audio Caller
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: python-dotenv
+Requires-Dist: rich
+Requires-Dist: questionary
+Requires-Dist: phonenumbers
+Requires-Dist: signalwire
+Requires-Dist: pyngrok
+Requires-Dist: requests
+
+# Anton
