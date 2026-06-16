@@ -1,5 +1,5 @@
-# ~ anton(ia) ~
-🐈 *a remote audio caller named after the stupidest clever drooling ufpb cat*
+# ~ anton ~
+🐈 *a remote audio caller named after ufpb's stupidest clever perpetuously drooling black cat*
 
 Anton is a Python CLI tool that rings up a phone number and plays audio. Give it a pre-existing mp3 or hand it a plain text file and Anton generates speech using Piper, exposes it to the web via ngrok, and bridges the phone call using SignalWire.
 
