@@ -448,5 +448,9 @@ class App:
             self.ui.success("Cleanup complete. Goodbye!")
 
 
+def cli_entry():
+    app = App()
+    app.run()
+
 if __name__ == "__main__":
-    App().run()
+    cli_entry()

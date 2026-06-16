@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anton"
+version = "0.1.0"
+description = "Anton: Automated TTS & Audio Caller"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "python-dotenv",
+    "rich",
+    "questionary",
+    "phonenumbers",
+    "signalwire",
+    "pyngrok",
+    "requests"
+]
+
+[project.scripts]
+anton = "anton.main:cli_entry"
