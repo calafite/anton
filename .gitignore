@@ -1,0 +1,8 @@
+*.onnx
+*.txt
+*.mp3
+audios/
+recordings/
+.whatsapp/
+.env
+*.json
