@@ -6,7 +6,6 @@ import logging
 import threading
 import time
 import re
-import urllib.parse
 
 
 def get_directory_handler(directory, debug_mode=False):
@@ -35,11 +34,14 @@ class Tunnel:
     def __enter__(self):
         with self.ui.status("Setting up local server & tunneling..."):
             handler = get_directory_handler(self.directory, self.cfg.debug)
-            self.server = http.server.HTTPServer(("", self.cfg.port), handler)
+
+            self.server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+            actual_port = self.server.server_port
+
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
             self.tunnel_process = subprocess.Popen(
-                ["cloudflared", "tunnel", "--url", f"http://localhost:{self.cfg.port}"],
+                ["cloudflared", "tunnel", "--url", f"http://127.0.0.1:{actual_port}"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -54,7 +56,6 @@ class Tunnel:
                     raise RuntimeError("Cloudflared crashed unexpectedly.")
 
                 line = self.tunnel_process.stderr.readline()
-
                 if not line:
                     break
 
@@ -67,25 +68,42 @@ class Tunnel:
                 self.tunnel_process.terminate()
                 raise RuntimeError("Timed out waiting for Cloudflare Tunnel URL.")
 
+            import urllib.parse
+
             safe_filename = urllib.parse.quote(self.filename)
             audio_url = f"{self.tunnel_url}/{safe_filename}"
 
+            self.ui.print("  [dim]↳ Waiting for Cloudflare DNS to propagate...[/dim]")
+            time.sleep(6)
+
             for attempt in range(20):
                 try:
-                    r = requests.head(audio_url, timeout=5)
+                    r = requests.head(audio_url, timeout=10)
                     if r.status_code < 500:
                         break
-                except requests.RequestException:
-                    pass
-                logging.debug(
-                    f"Tunnel not ready yet (attempt {attempt + 1}/20), retrying..."
-                )
-                time.sleep(1)
+                    else:
+                        logging.debug(f"Cloudflare returned HTTP {r.status_code}")
+
+                except requests.exceptions.ConnectionError as e:
+                    if "NameResolutionError" in str(e) or "NewConnectionError" in str(
+                        e
+                    ):
+                        logging.debug(
+                            f"DNS not ready yet (attempt {attempt + 1}/20)..."
+                        )
+                    else:
+                        logging.debug(f"Connection error: {e}")
+                except requests.RequestException as e:
+                    logging.debug(f"Request Exception: {e}")
+
+                time.sleep(2)
             else:
                 self.tunnel_process.terminate()
-                raise RuntimeError("Tunnel came up but never started serving the file.")
+                raise RuntimeError(
+                    "Tunnel came up but DNS never propagated or file is inaccessible."
+                )
 
-        self.ui.success(f"Local HTTP server running on port {self.cfg.port}")
+        self.ui.success(f"Local HTTP server running on port {actual_port}")
         self.ui.success(
             f"Cloudflare tunnel active: [link={audio_url}]{audio_url}[/link]"
         )
