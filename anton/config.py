@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
-import logging
 import shutil
+
+from .logger import SessionErrorLogger
 
 
 class Config:
@@ -14,15 +15,24 @@ class Config:
             "yes",
             "t",
         )
-        logging.basicConfig(
-            level=logging.DEBUG if self.debug else logging.WARNING,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+
+        self.error_log_dir = os.path.expanduser(
+            os.environ.get("ERROR_LOG_DIR", "~/.anton_logs")
+        )
+        self.max_log_files = int(os.environ.get("MAX_LOG_FILES", 5))
+
+        SessionErrorLogger(
+            log_dir=self.error_log_dir,
+            max_files=self.max_log_files,
+            debug_mode=self.debug,
         )
 
         self.project = os.environ.get("SW_PROJECT_ID")
         self.token = os.environ.get("SW_API_TOKEN")
         self.space = os.environ.get("SW_SPACE_URL")
+        if self.space and not self.space.startswith(("http://", "https://")):
+            self.space = f"https://{self.space}"
+
         self.from_number = os.environ.get("SW_FROM")
 
         self.model = os.environ.get("PIPER_MODEL", "pt_BR-cadu-medium")
