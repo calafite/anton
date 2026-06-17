@@ -6,3 +6,4 @@ recordings/
 .whatsapp/
 .env
 *.json
+*.pyc

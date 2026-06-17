@@ -5,6 +5,7 @@ import http.server
 import time
 import requests
 import logging
+import re
 
 from dotenv import load_dotenv
 from rich.console import Console
@@ -13,7 +14,6 @@ import questionary
 import phonenumbers
 
 from signalwire.rest import Client
-from pyngrok import ngrok, conf
 
 
 class Config:
@@ -36,7 +36,6 @@ class Config:
         self.token = os.environ.get("SW_API_TOKEN")
         self.space = os.environ.get("SW_SPACE_URL")
         self.from_number = os.environ.get("SW_FROM")
-        self.ngrok_token = os.environ.get("NGROK_AUTHTOKEN")
 
         self.model = os.environ.get("PIPER_MODEL", "pt_BR-cadu-medium")
         self.port = int(os.environ.get("PORT", 8080))
@@ -57,17 +56,21 @@ class Config:
             "t",
         )
 
-        self.recordings_dir = os.environ.get("RECORDINGS_DIR", "recordings")
-        self.history_file = os.environ.get("HISTORY_FILE", ".phone_history.txt")
+        self.recordings_dir = os.path.expanduser(
+            os.environ.get("RECORDINGS_DIR", "~/anton_recordings")
+        )
+        self.history_file = os.path.expanduser(
+            os.environ.get("HISTORY_FILE", "~/.anton_history")
+        )
 
     def validate(self):
-        required = ["project", "token", "space", "from_number", "ngrok_token"]
+        required = ["project", "token", "space", "from_number"]
         missing = [var for var in required if not getattr(self, var)]
 
         if missing:
             raise ValueError(f"Missing Environment Variables: {', '.join(missing)}")
 
-        for binary in ["ffmpeg", "ffprobe"]:
+        for binary in ["ffmpeg", "ffprobe", "cloudflared"]:
             if (
                 subprocess.call(
                     ["which", binary],
@@ -86,7 +89,9 @@ class UI:
         self.console = Console()
 
     def header(self):
-        self.console.print(Panel.fit("[bold cyan] Remote Call Tool[/bold cyan]"))
+        self.console.print(
+            Panel.fit("[bold cyan]🐈 Anton: Remote Audio Caller[/bold cyan]")
+        )
 
     def status(self, message):
         return self.console.status(f"[bold cyan]{message}[/bold cyan]")
@@ -147,7 +152,6 @@ class PhoneHistory:
 class Media:
     @staticmethod
     def get_duration(file_path):
-        """Uses ffprobe to return the audio duration in seconds."""
         try:
             r = subprocess.run(
                 [
@@ -176,7 +180,6 @@ class Audio:
         self.ui = ui
 
     def generate(self, text_file):
-        """Returns a tuple of (audio_file_path, was_newly_generated_boolean)"""
         audio_file = os.path.splitext(text_file)[0] + ".mp3"
 
         if os.path.isfile(audio_file):
@@ -236,7 +239,8 @@ class Tunnel:
         self.filename = os.path.basename(self.file_path)
         self.ui = ui
         self.server = None
-        self.ngrok_url = None
+        self.tunnel_process = None
+        self.tunnel_url = None
 
     def __enter__(self):
         with self.ui.status("Setting up local server & tunneling..."):
@@ -244,21 +248,44 @@ class Tunnel:
             self.server = http.server.HTTPServer(("", self.cfg.port), handler)
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
-            conf.get_default().auth_token = self.cfg.ngrok_token
-            self.ngrok_url = ngrok.connect(self.cfg.port, "http").public_url
+            self.tunnel_process = subprocess.Popen(
+                ["cloudflared", "tunnel", "--url", f"http://localhost:{self.cfg.port}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
 
-            audio_url = f"{self.ngrok_url}/{self.filename}"
+            for _ in range(100):
+                line = self.tunnel_process.stderr.readline()
+                if not line:
+                    break
+                match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                if match:
+                    self.tunnel_url = match.group(0)
+                    break
+                time.sleep(0.1)
+
+            if not self.tunnel_url:
+                self.tunnel_process.terminate()
+                raise RuntimeError(
+                    "Failed to retrieve Cloudflare Tunnel URL. Is 'cloudflared' installed?"
+                )
+
+            audio_url = f"{self.tunnel_url}/{self.filename}"
 
         self.ui.success(f"Local HTTP server running on port {self.cfg.port}")
-        self.ui.success(f"Ngrok tunnel active: [link={audio_url}]{audio_url}[/link]")
+        self.ui.success(
+            f"Cloudflare tunnel active: [link={audio_url}]{audio_url}[/link]"
+        )
         return audio_url
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.server:
             self.server.shutdown()
             self.server.server_close()
-        if self.ngrok_url:
-            ngrok.disconnect(self.ngrok_url)
+        if self.tunnel_process:
+            self.tunnel_process.terminate()
+            self.tunnel_process.wait()
 
 
 class Caller:
@@ -278,7 +305,7 @@ class Caller:
                 from_=self.cfg.from_number,
                 twiml=f"<Response><Play>{audio_url}</Play></Response>",
                 record=True,
-                timeout=self.cfg.call_timeout,  # Kept timeout for ringing duration, removed time_limit
+                timeout=self.cfg.call_timeout,
             )
         self.ui.success(f"Call placed! SID: [bold dim]{call.sid}[/bold dim]")
         return call.sid
@@ -365,7 +392,10 @@ class App:
 
     @staticmethod
     def validate_file_exists(path):
-        return os.path.isfile(path) or "File does not exist. Press TAB to browse."
+        expanded_path = os.path.expanduser(path)
+        return (
+            os.path.isfile(expanded_path) or "File does not exist. Press TAB to browse."
+        )
 
     def run(self):
         generated_audio_cleanup_target = None
@@ -394,6 +424,8 @@ class App:
             ).ask()
             if not input_file:
                 return
+
+            input_file = os.path.abspath(os.path.expanduser(input_file))
 
             self.ui.print("\n[bold dim]Starting execution pipeline...[/bold dim]")
 
@@ -451,6 +483,7 @@ class App:
 def cli_entry():
     app = App()
     app.run()
+
 
 if __name__ == "__main__":
     cli_entry()
