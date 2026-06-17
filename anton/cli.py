@@ -75,6 +75,48 @@ class App:
             os.path.isfile(expanded_path) or "File does not exist. Press TAB to browse."
         )
 
+    def configure(self):
+        self.ui.header()
+        self.ui.print("[bold]Interactive Configuration[/bold]\n")
+
+        env_file = os.path.join(os.getcwd(), ".env")
+        if os.path.exists(env_file):
+            if not questionary.confirm("A .env file already exists. Overwrite?").ask():
+                return
+
+        project = questionary.text("SignalWire Project ID:").ask()
+        if project is None:
+            return
+        token = questionary.password("SignalWire API Token:").ask()
+        if token is None:
+            return
+        space = questionary.text("SignalWire Space URL:").ask()
+        if space is None:
+            return
+        from_number = questionary.text("SignalWire From Number:").ask()
+        if from_number is None:
+            return
+        region = questionary.text(
+            "Default Phone Region (e.g., BR, US):", default="BR"
+        ).ask()
+        if region is None:
+            return
+        prefix = questionary.text(
+            "Default Country Code Prefix (e.g., +55, +1):", default="+55"
+        ).ask()
+        if prefix is None:
+            return
+
+        with open(env_file, "w") as f:
+            f.write(f"SW_PROJECT_ID={project}\n")
+            f.write(f"SW_API_TOKEN={token}\n")
+            f.write(f"SW_SPACE_URL={space}\n")
+            f.write(f"SW_FROM={from_number}\n")
+            f.write(f"PHONE_REGION={region}\n")
+            f.write(f"PHONE_PREFIX={prefix}\n")
+
+        self.ui.success(f"Configuration saved to {env_file}")
+
     def run(self):
         generated_audio_cleanup_target = None
 
