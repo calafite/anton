@@ -6,6 +6,8 @@ import logging
 import threading
 import time
 import re
+import urllib.parse
+
 
 def get_directory_handler(directory, debug_mode=False):
     class DirectoryQuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -45,24 +47,28 @@ class Tunnel:
 
             if not self.tunnel_process.stderr:
                 raise RuntimeError("Failed to open stderr for cloudflared process.")
-                
-            for _ in range(100):
+
+            start_time = time.time()
+            while time.time() - start_time < 15:
+                if self.tunnel_process.poll() is not None:
+                    raise RuntimeError("Cloudflared crashed unexpectedly.")
+
                 line = self.tunnel_process.stderr.readline()
+
                 if not line:
                     break
+
                 match = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
                 if match:
                     self.tunnel_url = match.group(0)
                     break
-                time.sleep(0.1)
 
             if not self.tunnel_url:
                 self.tunnel_process.terminate()
-                raise RuntimeError(
-                    "Failed to retrieve Cloudflare Tunnel URL. Is 'cloudflared' installed?"
-                )
+                raise RuntimeError("Timed out waiting for Cloudflare Tunnel URL.")
 
-            audio_url = f"{self.tunnel_url}/{self.filename}"
+            safe_filename = urllib.parse.quote(self.filename)
+            audio_url = f"{self.tunnel_url}/{safe_filename}"
 
             for attempt in range(20):
                 try:
@@ -91,7 +97,10 @@ class Tunnel:
             self.server.server_close()
         if self.tunnel_process:
             self.tunnel_process.terminate()
-            self.tunnel_process.wait()
+            try:
+                self.tunnel_process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.tunnel_process.kill()
 
 
 class TempUpload:

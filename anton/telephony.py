@@ -61,13 +61,17 @@ class Caller:
 
     def place_call(self, to_number, audio_url):
         with self.ui.status(f"Calling {to_number}..."):
-            call = self.client.calls.create(
-                to=to_number,
-                from_=self.cfg.from_number,
-                twiml=f"<Response><Play>{audio_url}</Play></Response>",
-                record=True,
-                timeout=self.cfg.call_timeout,
-            )
+            try:
+                call = self.client.calls.create(
+                    to=to_number,
+                    from_=self.cfg.from_number,
+                    twiml=f"<Response><Play>{audio_url}</Play></Response>",
+                    record=True,
+                    timeout=self.cfg.call_timeout,
+                )
+            except Exception as e:
+                raise RuntimeError(f"Failed to communicate with SignalWire: {str(e)}")
+
         self.ui.success(f"Call placed! SID: [bold dim]{call.sid}[/bold dim]")
         return call.sid
 

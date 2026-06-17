@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 import logging
-import subprocess
+import shutil
 
 
 class Config:
@@ -59,14 +59,7 @@ class Config:
             raise ValueError(f"Missing Environment Variables: {', '.join(missing)}")
 
         for binary in ["ffmpeg", "ffprobe", "cloudflared"]:
-            if (
-                subprocess.call(
-                    ["which", binary],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                != 0
-            ):
+            if shutil.which(binary) is None:
                 raise RuntimeError(
                     f"Dependency '{binary}' is not installed or not in PATH."
                 )
