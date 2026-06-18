@@ -7,4 +7,4 @@ recordings/
 .env
 *.json
 *.pyc
-*.egg-info
+anton.egg-info/
