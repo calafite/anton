@@ -14,7 +14,6 @@ dependencies = [
     "questionary",
     "phonenumbers",
     "signalwire",
-    "pyngrok",
     "requests"
 ]
 
