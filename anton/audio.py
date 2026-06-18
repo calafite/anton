@@ -3,6 +3,7 @@ import logging
 import os
 import questionary
 
+
 class Media:
     @staticmethod
     def get_duration(file_path):
