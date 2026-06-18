@@ -36,7 +36,7 @@ This registers the `anton` command globally on your system.
 ***
 
 ### ~ configuration ~
-The easiest way to configure Anton is by running its built-in interactive setup, which will prompt you for your credentials, validate them with SignalWire, and generate a `.env` file for you:
+The easiest way to configure Anton is by running its built-in interactive setup, which will prompt you for your credentials, validate them with SignalWire and generate a `.env` file for you:
 
 ```bash
 > anton config
