@@ -274,7 +274,6 @@ class App:
                     from signalwire.rest import Client
 
                     client = Client(project, token, signalwire_space_url=space)
-                    # A lightweight API call to verify the token/project combination
                     client.api.accounts(project).fetch()
                 except Exception as e:
                     self.ui.error(
